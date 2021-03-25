@@ -1,5 +1,4 @@
-#ifndef TEXT_RENDERER_H
-#define TEXT_RENDERER_H
+#pragma once
 
 #include <glad/glad.h>
 #include <glm/glm.hpp>
@@ -36,4 +35,3 @@ private:
 	std::map<char, Character> Characters;
 };
 
-#endif
