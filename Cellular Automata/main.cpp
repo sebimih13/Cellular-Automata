@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "ResourceManager.h"
+#include "Animation.h"
 
 // callback
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
@@ -30,22 +31,35 @@ double deltaTime = 0.0f;		// time between current frame and last frame
 double lastFrame = 0.0f;		// time of last frame
 
 // table settings
-const int TABLE_WIDTH = 100;
-const int TABLE_HEIGHT = 70;
+const int TABLE_WIDTH = 10;
+const int TABLE_HEIGHT = 10;
 const int MAX_ZOOM = 50;
-const int MIN_ZOOM = 8;
+const int MIN_ZOOM = 10;
 int SquareSize = 10;
+
+// table state
+enum ETableState
+{
+	TABLE_DRAW,
+	TABLE_VISUALIZE,
+	TABLE_PAUSE
+} TableState;
 
 // cursor settings
 GLFWcursor* HandCursor;
 
-// perspective coordinates
-int PerspectiveX = 0;
-int PerspectiveY = 0;
+// table coordinates
+int TableUpX = 0;
+int TableUpY = 0;
 
 // mouse
-bool IsMouseMoving;
+bool IsLeftMousePressed;
+bool IsRightMousePressed;
+bool IsLeftCtrlPressed;
 double LastX, LastY;
+
+// animation manager
+AnimationManager* Animations;
 
 int main()
 {
@@ -55,6 +69,7 @@ int main()
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	glfwWindowHint(GLFW_SAMPLES, 4);
+	glfwWindowHint(GLFW_RESIZABLE, false);
 
 	// glfw window creation
 	GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Cellular Automata", NULL, NULL);
@@ -67,7 +82,7 @@ int main()
 	glfwMakeContextCurrent(window);
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 	glfwSetCursorPosCallback(window, mouse_cursor_callback);
-	glfwSetScrollCallback(window, scroll_callback); 
+	glfwSetScrollCallback(window, scroll_callback);
 	glfwSetMouseButtonCallback(window, mouse_button_callback);
 
 	// glad: load all OpenGL function pointers
@@ -87,7 +102,11 @@ int main()
 
 	Init();
 
+	TableState = ETableState::TABLE_DRAW;
+
+	Animations = new AnimationManager((float)SquareSize, TableUpX, TableUpY);
 	
+
 	// render loop
 	while (!glfwWindowShouldClose(window))
 	{
@@ -105,14 +124,17 @@ int main()
 		glClearColor(0.83137f, 0.82353f, 0.83137f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		
 		DrawTable();
+		Animations->Draw((float)deltaTime);
 
 
 		// check and call events and swap the buffers
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
+
+	// delete pointers
+	delete Animations;
 
 	// glfw: terminate, clearing all previously allocated GLFW resources
 	glfwTerminate();
@@ -132,24 +154,73 @@ void processInput(GLFWwindow* window)
 {
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
+
+	if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
+	{
+		glfwGetCursorPos(window, &LastX, &LastY);
+		glfwSetCursor(window, HandCursor);
+		IsLeftCtrlPressed = true;
+	}
+	else
+	{
+		IsLeftCtrlPressed = false;
+		glfwSetCursor(window, NULL);
+	}
+
+	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+	{
+		if (TableState == ETableState::TABLE_DRAW)
+			TableState = ETableState::TABLE_VISUALIZE;
+		else if (TableState == ETableState::TABLE_VISUALIZE)
+			TableState = ETableState::TABLE_PAUSE;
+		else if (TableState == ETableState::TABLE_PAUSE)
+			TableState = ETableState::TABLE_VISUALIZE;
+	}
+
+	
+	if (TableState == ETableState::TABLE_DRAW)
+	{
+		// Check if a square is selected
+		glfwGetCursorPos(window, &LastX, &LastY);
+
+		int TableDownX = TableUpX + SquareSize * TABLE_WIDTH;
+		int TableDownY = TableUpY + SquareSize * TABLE_HEIGHT;
+
+		if (TableUpX < LastX && LastX < TableDownX && TableUpY < LastY && LastY < TableDownY)
+		{
+			int SquareRow = ((int)LastY - TableUpY) / SquareSize;
+			int SquareColumn = ((int)LastX - TableUpX) / SquareSize;
+
+			// todo
+			// std::cout << "Square : " << SquareRow << ' ' << SquareColumn << '\n';
+
+			if (IsRightMousePressed)
+				Animations->DeleteBlock({ SquareRow, SquareColumn });
+			else if (IsLeftMousePressed)
+				Animations->AddBlock({ SquareRow, SquareColumn });
+		}
+	}
 }
 
 void mouse_cursor_callback(GLFWwindow* window, double xpos, double ypos)
 {
-	if (IsMouseMoving)
+	if (IsLeftCtrlPressed)
 	{
 		double xoffset = xpos - LastX;
 		double yoffset = LastY - ypos;
 		LastX = xpos;
 		LastY = ypos;
 
-		PerspectiveX += (int)xoffset;
-		PerspectiveY -= (int)yoffset;
+		TableUpX += (int)xoffset;
+		TableUpY -= (int)yoffset;
+
+		Animations->SetTablePosition(TableUpX, TableUpY);
 	}
 }
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
+	int LastSquareSize = SquareSize;
 	SquareSize += (int)yoffset;
 
 	if (SquareSize < MIN_ZOOM)
@@ -158,21 +229,50 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 	if (SquareSize > MAX_ZOOM)
 		SquareSize = MAX_ZOOM;
 
-	std::cout << SquareSize << '\n';
+	if (LastSquareSize == SquareSize)
+		return;
+
+	Animations->SetTableSquareSize((float)SquareSize);
+	
+	glfwGetCursorPos(window, &LastX, &LastY);
+
+	int DiffX = (int)LastX - TableUpX;
+	int DiffY = (int)LastY - TableUpY;
+
+	float LastSquareX = (float)DiffX / (float)LastSquareSize;
+	float LastSquareY = (float)DiffY / (float)LastSquareSize;
+	
+	// TODO ->
+	// DiffX = ? a.i.:				DiffX / SquareSize == LastSquareX
+	//							   (LastX - TableUpX) / SquareSize == LastSquareX
+	//							   (LastX - TableUpX) / SquareSize == LastSquareX
+	//							    LastX - TableUpX == LastSquareX * SquareSize | * (-1)
+	//							    TableUpX == LastX - LastSquareX * SquareSize
+
+	TableUpX = (int)((float)LastX - LastSquareX * (float)SquareSize);
+	TableUpY = (int)((float)LastY - LastSquareY * (float)SquareSize);
+
+	Animations->SetTablePosition(TableUpX, TableUpY);
 }
 
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
-	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
 	{
-		glfwGetCursorPos(window, &LastX, &LastY);
-		IsMouseMoving = true;
-		glfwSetCursor(window, HandCursor);
+		IsRightMousePressed = true;
 	}
 	else
 	{
-		IsMouseMoving = false;
-		glfwSetCursor(window, NULL);
+		IsRightMousePressed = false;
+	}
+
+	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+	{
+		IsLeftMousePressed = true;
+	}
+	else
+	{
+		IsLeftMousePressed = false;
 	}
 }
 
@@ -180,6 +280,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 //														Utility functions
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+// todo : do we need a QuadVAO?
 GLuint LineVAO, QuadVAO;
 void Init()
 {
@@ -244,10 +345,6 @@ void Init()
 
 void DrawTable()
 {
-	// TODO: DEBUG
-	// std::cout << "Perspective : " << PerspectiveX << ' ' << PerspectiveY << '\n';
-
-
 	glm::mat4 model = glm::mat4(1.0f);
 
 	// draw rows and columns
@@ -256,10 +353,10 @@ void DrawTable()
 	ResourceManager::GetShader("line").SetVector3f("color", glm::vec3(0.0f, 0.0f, 0.0f));
 
 	// draw rows
-	for (int y = PerspectiveY; y <= PerspectiveY + TABLE_HEIGHT * SquareSize; y += SquareSize)
+	for (int y = TableUpY; y <= TableUpY + TABLE_HEIGHT * SquareSize; y += SquareSize)
 	{
 		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(PerspectiveX, y, 0.0f));
+		model = glm::translate(model, glm::vec3(TableUpX, y, 0.0f));
 		model = glm::scale(model, glm::vec3((float)(TABLE_WIDTH * SquareSize), 0.0f, 0.0f));
 		ResourceManager::GetShader("line").SetMatrix4f("model", model);
 
@@ -267,10 +364,10 @@ void DrawTable()
 	}
 
 	// draw columns
-	for (int x = PerspectiveX; x <= PerspectiveX + TABLE_WIDTH * SquareSize; x += SquareSize)
+	for (int x = TableUpX; x <= TableUpX + TABLE_WIDTH * SquareSize; x += SquareSize)
 	{
 		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(x, PerspectiveY, 0.0f));
+		model = glm::translate(model, glm::vec3(x, TableUpY, 0.0f));
 		model = glm::rotate(model, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 		model = glm::scale(model, glm::vec3((float)(TABLE_HEIGHT * SquareSize), 0.0f, 0.0f));
 		ResourceManager::GetShader("line").SetMatrix4f("model", model);
