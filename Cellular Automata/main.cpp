@@ -195,6 +195,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		TimerAnimation = 0.0f;
 		Animations->Reset();
 		TableMatrix.assign(TABLE_WIDTH, std::vector<bool>(TABLE_HEIGHT, false));
+		AuxTable.assign(TABLE_WIDTH, std::vector<bool>(TABLE_HEIGHT, false));
 	}
 
 	if (key == GLFW_KEY_LEFT_CONTROL && action == GLFW_PRESS)
@@ -309,8 +310,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 //														Utility functions
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// todo : do we need a QuadVAO?
-GLuint LineVAO, QuadVAO;
+GLuint LineVAO;
 void Init()
 {
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -335,32 +335,6 @@ void Init()
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
 
-	// QUAD
-	float QuadVertices[] = {
-		0.0f, 0.0f,
-		1.0f, 1.0f,
-		0.0f, 1.0f,
-
-		0.0f, 0.0f,
-		1.0f, 0.0f,
-		1.0f, 1.0f
-	};
-
-	GLuint QuadVBO;
-	glGenVertexArrays(1, &QuadVAO);
-	glGenBuffers(1, &QuadVBO);
-
-	glBindBuffer(GL_ARRAY_BUFFER, QuadVBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(QuadVertices), QuadVertices, GL_STATIC_DRAW);
-
-	glBindVertexArray(QuadVAO);
-
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
-
-	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	//														Shaders
-	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	// load shaders
 	ResourceManager::LoadShader("shaders/line.vert", "shaders/line.frag", nullptr, "line");
