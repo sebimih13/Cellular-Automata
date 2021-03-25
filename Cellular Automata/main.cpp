@@ -13,7 +13,7 @@
 
 // callback
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
-void processInput(GLFWwindow* window);
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
 void mouse_cursor_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
@@ -21,6 +21,8 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 // utility functions
 void Init();
 void DrawTable();
+void processInput(GLFWwindow* window);
+void ProcessNextGeneration();
 
 // window settings
 const unsigned int SCR_WIDTH = 1200;
@@ -31,8 +33,8 @@ double deltaTime = 0.0f;		// time between current frame and last frame
 double lastFrame = 0.0f;		// time of last frame
 
 // table settings
-const int TABLE_WIDTH = 10;
-const int TABLE_HEIGHT = 10;
+const int TABLE_WIDTH = 100;
+const int TABLE_HEIGHT = 100;
 const int MAX_ZOOM = 50;
 const int MIN_ZOOM = 10;
 int SquareSize = 10;
@@ -41,7 +43,7 @@ int SquareSize = 10;
 enum ETableState
 {
 	TABLE_DRAW,
-	TABLE_VISUALIZE,
+	TABLE_PLAY,
 	TABLE_PAUSE
 } TableState;
 
@@ -60,6 +62,13 @@ double LastX, LastY;
 
 // animation manager
 AnimationManager* Animations;
+
+const float NextGenerationAnimation = 1.5f;
+float TimerAnimation = 0.0f;
+
+// game of life
+std::vector<std::vector<bool>> TableMatrix(TABLE_WIDTH, std::vector<bool>(TABLE_HEIGHT)), 
+							   AuxTable(TABLE_WIDTH, std::vector<bool>(TABLE_HEIGHT));
 
 int main()
 {
@@ -81,6 +90,7 @@ int main()
 	}
 	glfwMakeContextCurrent(window);
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+	glfwSetKeyCallback(window, key_callback);
 	glfwSetCursorPosCallback(window, mouse_cursor_callback);
 	glfwSetScrollCallback(window, scroll_callback);
 	glfwSetMouseButtonCallback(window, mouse_button_callback);
@@ -124,6 +134,20 @@ int main()
 		glClearColor(0.83137f, 0.82353f, 0.83137f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
+
+		if (TableState == ETableState::TABLE_PLAY)
+		{
+			if (TimerAnimation >= NextGenerationAnimation)
+			{
+				ProcessNextGeneration();
+				TimerAnimation = 0.0f;
+			}
+			else
+			{
+				TimerAnimation += (float)deltaTime;
+			}
+		}
+
 		DrawTable();
 		Animations->Draw((float)deltaTime);
 
@@ -150,34 +174,44 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 	glViewport(0, 0, width, height);
 }
 
-void processInput(GLFWwindow* window)
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode)
 {
-	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
 
-	if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
+	if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
+	{
+		if (TableState == ETableState::TABLE_DRAW)
+			TableState = ETableState::TABLE_PLAY;
+		else if (TableState == ETableState::TABLE_PLAY)
+			TableState = ETableState::TABLE_PAUSE;
+		else if (TableState == ETableState::TABLE_PAUSE)
+			TableState = ETableState::TABLE_PLAY;
+	}
+
+	if (key == GLFW_KEY_BACKSPACE && action == GLFW_PRESS)
+	{
+		TableState = ETableState::TABLE_DRAW;
+		TimerAnimation = 0.0f;
+		Animations->Reset();
+		TableMatrix.assign(TABLE_WIDTH, std::vector<bool>(TABLE_HEIGHT, false));
+	}
+
+	if (key == GLFW_KEY_LEFT_CONTROL && action == GLFW_PRESS)
 	{
 		glfwGetCursorPos(window, &LastX, &LastY);
 		glfwSetCursor(window, HandCursor);
 		IsLeftCtrlPressed = true;
 	}
-	else
+	else if (key == GLFW_KEY_LEFT_CONTROL && action == GLFW_RELEASE)
 	{
 		IsLeftCtrlPressed = false;
 		glfwSetCursor(window, NULL);
 	}
+}
 
-	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
-	{
-		if (TableState == ETableState::TABLE_DRAW)
-			TableState = ETableState::TABLE_VISUALIZE;
-		else if (TableState == ETableState::TABLE_VISUALIZE)
-			TableState = ETableState::TABLE_PAUSE;
-		else if (TableState == ETableState::TABLE_PAUSE)
-			TableState = ETableState::TABLE_VISUALIZE;
-	}
-
-	
+void processInput(GLFWwindow* window)
+{
 	if (TableState == ETableState::TABLE_DRAW)
 	{
 		// Check if a square is selected
@@ -191,13 +225,16 @@ void processInput(GLFWwindow* window)
 			int SquareRow = ((int)LastY - TableUpY) / SquareSize;
 			int SquareColumn = ((int)LastX - TableUpX) / SquareSize;
 
-			// todo
-			// std::cout << "Square : " << SquareRow << ' ' << SquareColumn << '\n';
-
 			if (IsRightMousePressed)
+			{
 				Animations->DeleteBlock({ SquareRow, SquareColumn });
+				TableMatrix[SquareRow][SquareColumn] = false;
+			}
 			else if (IsLeftMousePressed)
+			{
 				Animations->AddBlock({ SquareRow, SquareColumn });
+				TableMatrix[SquareRow][SquareColumn] = true;
+			}
 		}
 	}
 }
@@ -258,22 +295,14 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
 	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
-	{
 		IsRightMousePressed = true;
-	}
 	else
-	{
 		IsRightMousePressed = false;
-	}
 
 	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
-	{
 		IsLeftMousePressed = true;
-	}
 	else
-	{
 		IsLeftMousePressed = false;
-	}
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -376,5 +405,63 @@ void DrawTable()
 	}
 
 	glBindVertexArray(0);
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//														Game of life
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/*
+
+	1. Any live cell with fewer than two live neighbours dies, as if by underpopulation.
+	2. Any live cell with two or three live neighbours lives on to the next generation.
+	3. Any live cell with more than three live neighbours dies, as if by overpopulation.
+	4. Any dead cell with exactly three live neighbours becomes a live cell, as if by reproduction.
+
+*/
+
+bool InMatrix(int x, int y)
+{
+	return 0 <= x && x < TABLE_WIDTH && 0 <= y && y < TABLE_HEIGHT;
+}
+
+const int DirX[] = { 0, 0, 1, 1, 1, -1, -1, -1 };
+const int DirY[] = { -1, 1, -1, 0, 1, -1, 0, 1 };
+
+void ProcessNextGeneration()
+{
+	Animations->Reset();
+
+	for (int x = 0; x < TABLE_WIDTH; x++)
+	{
+		for (int y = 0; y < TABLE_HEIGHT; y++)
+		{
+			int LivingCells = 0;
+			for (int i = 0; i < 8; i++)
+			{
+				std::pair<int, int> neighbour = { x + DirX[i], y + DirY[i] };
+
+				if (InMatrix(neighbour.first, neighbour.second) && TableMatrix[neighbour.first][neighbour.second])
+					LivingCells++;
+			}
+
+			if (TableMatrix[x][y])
+			{
+				if (2 <= LivingCells && LivingCells <= 3)
+					AuxTable[x][y] = true;
+				else
+					AuxTable[x][y] = false;
+			}
+			else if (LivingCells == 3)
+			{
+				AuxTable[x][y] = true;
+			}
+
+			if (AuxTable[x][y])
+				Animations->AddBlock({ x, y });
+		}
+	}
+
+	TableMatrix = AuxTable;
 }
 

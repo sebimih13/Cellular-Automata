@@ -70,12 +70,8 @@ void AnimationManager::DrawSquare(Animation& sq)
 void AnimationManager::AddBlock(coordinates sq)
 {
 	if (FindBlock(sq) == -1)
-	{
-		// todo
-		std::cout << "Added : " << sq.X << ' ' << sq.Y << '\n';
 
 		BlockAnims.push_back(Animation(sq));
-	}
 }
 
 int AnimationManager::FindBlock(coordinates& sq)
