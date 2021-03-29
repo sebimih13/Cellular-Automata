@@ -70,7 +70,6 @@ void AnimationManager::DrawSquare(Animation& sq)
 void AnimationManager::AddBlock(coordinates sq)
 {
 	if (FindBlock(sq) == -1)
-
 		BlockAnims.push_back(Animation(sq));
 }
 
