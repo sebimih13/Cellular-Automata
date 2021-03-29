@@ -51,8 +51,8 @@ enum ETableState
 GLFWcursor* HandCursor;
 
 // table coordinates
-int TableUpX = 0;
-int TableUpY = 0;
+float TableUpX = 0;
+float TableUpY = 0;
 
 // mouse
 bool IsLeftMousePressed;
@@ -114,7 +114,7 @@ int main()
 
 	TableState = ETableState::TABLE_DRAW;
 
-	Animations = new AnimationManager((float)SquareSize, TableUpX, TableUpY);
+	Animations = new AnimationManager((float)SquareSize, (int)TableUpX, (int)TableUpY);
 	
 
 	// render loop
@@ -218,13 +218,13 @@ void processInput(GLFWwindow* window)
 		// Check if a square is selected
 		glfwGetCursorPos(window, &LastX, &LastY);
 
-		int TableDownX = TableUpX + SquareSize * TABLE_WIDTH;
-		int TableDownY = TableUpY + SquareSize * TABLE_HEIGHT;
+		int TableDownX = (int)TableUpX + SquareSize * TABLE_WIDTH;
+		int TableDownY = (int)TableUpY + SquareSize * TABLE_HEIGHT;
 
-		if (TableUpX < LastX && LastX < TableDownX && TableUpY < LastY && LastY < TableDownY)
+		if ((int)TableUpX < LastX && LastX < TableDownX && (int)TableUpY < LastY && LastY < TableDownY)
 		{
-			int SquareRow = ((int)LastY - TableUpY) / SquareSize;
-			int SquareColumn = ((int)LastX - TableUpX) / SquareSize;
+			int SquareRow = ((int)LastY - (int)TableUpY) / SquareSize;
+			int SquareColumn = ((int)LastX - (int)TableUpX) / SquareSize;
 
 			if (IsRightMousePressed)
 			{
@@ -249,10 +249,10 @@ void mouse_cursor_callback(GLFWwindow* window, double xpos, double ypos)
 		LastX = xpos;
 		LastY = ypos;
 
-		TableUpX += (int)xoffset;
-		TableUpY -= (int)yoffset;
+		TableUpX += (float)xoffset;
+		TableUpY -= (float)yoffset;
 
-		Animations->SetTablePosition(TableUpX, TableUpY);
+		Animations->SetTablePosition((int)TableUpX, (int)TableUpY);
 	}
 }
 
@@ -274,23 +274,22 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 	
 	glfwGetCursorPos(window, &LastX, &LastY);
 
-	int DiffX = (int)LastX - TableUpX;
-	int DiffY = (int)LastY - TableUpY;
+	float DiffX = (float)LastX - TableUpX;
+	float DiffY = (float)LastY - TableUpY;
 
-	float LastSquareX = (float)DiffX / (float)LastSquareSize;
-	float LastSquareY = (float)DiffY / (float)LastSquareSize;
+	float LastSquareX = DiffX / (float)LastSquareSize;
+	float LastSquareY = DiffY / (float)LastSquareSize;
 	
-	// TODO ->
 	// DiffX = ? a.i.:				DiffX / SquareSize == LastSquareX
 	//							   (LastX - TableUpX) / SquareSize == LastSquareX
 	//							   (LastX - TableUpX) / SquareSize == LastSquareX
 	//							    LastX - TableUpX == LastSquareX * SquareSize | * (-1)
 	//							    TableUpX == LastX - LastSquareX * SquareSize
 
-	TableUpX = (int)((float)LastX - LastSquareX * (float)SquareSize);
-	TableUpY = (int)((float)LastY - LastSquareY * (float)SquareSize);
+	TableUpX = (float)LastX - LastSquareX * (float)SquareSize;
+	TableUpY = (float)LastY - LastSquareY * (float)SquareSize;
 
-	Animations->SetTablePosition(TableUpX, TableUpY);
+	Animations->SetTablePosition((int)TableUpX, (int)TableUpY);
 }
 
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
@@ -356,10 +355,10 @@ void DrawTable()
 	ResourceManager::GetShader("line").SetVector3f("color", glm::vec3(0.0f, 0.0f, 0.0f));
 
 	// draw rows
-	for (int y = TableUpY; y <= TableUpY + TABLE_HEIGHT * SquareSize; y += SquareSize)
+	for (int y = (int)TableUpY; y <= (int)TableUpY + TABLE_HEIGHT * SquareSize; y += SquareSize)
 	{
 		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(TableUpX, y, 0.0f));
+		model = glm::translate(model, glm::vec3((int)TableUpX, y, 0.0f));
 		model = glm::scale(model, glm::vec3((float)(TABLE_WIDTH * SquareSize), 0.0f, 0.0f));
 		ResourceManager::GetShader("line").SetMatrix4f("model", model);
 
@@ -367,10 +366,10 @@ void DrawTable()
 	}
 
 	// draw columns
-	for (int x = TableUpX; x <= TableUpX + TABLE_WIDTH * SquareSize; x += SquareSize)
+	for (int x = (int)TableUpX; x <= (int)TableUpX + TABLE_WIDTH * SquareSize; x += SquareSize)
 	{
 		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(x, TableUpY, 0.0f));
+		model = glm::translate(model, glm::vec3(x, (int)TableUpY, 0.0f));
 		model = glm::rotate(model, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 		model = glm::scale(model, glm::vec3((float)(TABLE_HEIGHT * SquareSize), 0.0f, 0.0f));
 		ResourceManager::GetShader("line").SetMatrix4f("model", model);
