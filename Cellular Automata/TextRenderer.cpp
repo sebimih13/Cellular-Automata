@@ -33,6 +33,8 @@ TextRenderer::TextRenderer(unsigned int width, unsigned int height)
 void TextRenderer::Load(std::string font, unsigned int fontSize)
 {
 	// clear the previously loaded Characters
+	for (auto ch : Characters)
+		glDeleteTextures(1, &ch.second.TextureID);
 	Characters.clear();
 
 	// initialize and load the FreeType library
